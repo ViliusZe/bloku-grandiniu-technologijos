@@ -61,6 +61,37 @@ bool readFile(const std::string& filename, std::string& text) {
 
     return true;
 }
+int countDifferentBits(const std::string& first,
+    const std::string& second) {
+    int count = 0;
+
+    for (std::size_t i = 0; i < first.size(); i += 2) {
+        int a = std::stoi(first.substr(i, 2), nullptr, 16);
+        int b = std::stoi(second.substr(i, 2), nullptr, 16);
+
+        int difference = a ^ b;
+
+        while (difference != 0) {
+            count += difference & 1;
+            difference >>= 1;
+        }
+    }
+
+    return count;
+}
+
+void testAvalanche() {
+    std::string first = calculateHash("ab");
+    std::string second = calculateHash("ac");
+
+    int differentBits = countDifferentBits(first, second);
+    double percentage = 100.0 * differentBits / 256.0;
+
+    std::cout << "ab maisa: " << first << '\n';
+    std::cout << "ac maisa: " << second << '\n';
+    std::cout << "Skirtingu bitu: " << differentBits << " is 256\n";
+    std::cout << "Bitu skirtumas: " << percentage << "%\n";
+}
 int testDeterminism() {
     const std::array<std::string, 6> inputs = {
         "", "a", "ab", "ba", " a ", std::string(2000, 'x')
@@ -95,6 +126,10 @@ int main(int argc, char* argv[]) {
 #endif
     if (argc == 2 && std::string(argv[1]) == "--test") {
         return testDeterminism();
+    }
+    if (argc == 2 && std::string(argv[1]) == "--avalanche") {
+        testAvalanche();
+        return 0;
     }
     std::string text;
 
