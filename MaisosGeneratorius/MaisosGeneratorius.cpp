@@ -61,13 +61,41 @@ bool readFile(const std::string& filename, std::string& text) {
 
     return true;
 }
+int testDeterminism() {
+    const std::array<std::string, 6> inputs = {
+        "", "a", "ab", "ba", " a ", std::string(2000, 'x')
+    };
+
+    for (const std::string& text : inputs) {
+        std::string expected = calculateHash(text);
+
+        for (int repeat = 0; repeat < 5; ++repeat) {
+            calculateHash("tarpinis tekstas");
+            std::string actual = calculateHash(text);
+
+            if (actual != expected) {
+                std::cerr << "KLAIDA: maisa pasikeite. Ivesties baitu: "
+                    << text.size() << '\n';
+                return 1;
+            }
+        }
+
+        std::cout << "OK: " << text.size() << " baitu | "
+            << expected << '\n';
+    }
+
+    std::cout << "Determinizmo testai pavyko.\n";
+    return 0;
+}
 
 int main(int argc, char* argv[]) {
 #ifdef _WIN32
     SetConsoleCP(CP_UTF8);
     SetConsoleOutputCP(CP_UTF8);
 #endif
-
+    if (argc == 2 && std::string(argv[1]) == "--test") {
+        return testDeterminism();
+    }
     std::string text;
 
     if (argc == 1) {
