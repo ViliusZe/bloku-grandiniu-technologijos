@@ -9,6 +9,10 @@
 #include <windows.h>
 #endif
 constexpr std::size_t MAX_INPUT_BYTES = 16u * 1024u * 1024u;
+std::uint32_t rotateLeft13(std::uint32_t value) {
+    return (value << 13) | (value >> 19);
+}
+
 std::string calculateHash(const std::string& text) {
     std::array<std::uint32_t, 8> state = {
         1, 2, 3, 4, 5, 6, 7, 8
@@ -21,6 +25,21 @@ std::string calculateHash(const std::string& text) {
     for (unsigned char ch : text) {
         for (std::size_t i = 0; i < state.size(); ++i) {
             state[i] = (state[i] * multipliers[i]) ^ ch;
+        }
+    }
+
+    // Baigiamasis maišymas tarp būsenos skaičių.
+    for (int round = 0; round < 8; ++round) {
+        const auto previous = state;
+
+        for (std::size_t i = 0; i < state.size(); ++i) {
+            std::uint32_t mixed =
+                previous[i] ^ previous[(i + 1) % state.size()];
+
+            mixed = rotateLeft13(mixed);
+
+            state[i] = mixed * multipliers[i]
+                + previous[(i + 3) % state.size()];
         }
     }
 
