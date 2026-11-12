@@ -1,0 +1,15 @@
+Formatas tinkamas. Ivesties baitu: 0
+Formatas tinkamas. Ivesties baitu: 1
+Formatas tinkamas. Ivesties baitu: 2
+Formatas tinkamas. Ivesties baitu: 2
+Formatas tinkamas. Ivesties baitu: 3
+Formatas tinkamas. Ivesties baitu: 2000
+Formatas tinkamas. Ivesties baitu: 2
+Formato testai pavyko.
+OK: 0 baitu | 9badaf25f6a68acd4eb04a65ddb68e2f0420e968db749c0920c266ed0e97c578
+OK: 1 baitu | 3ebe9faf4621510b7cda5fac49687801ecf02a8d6c21db5a6d2570dc45ae7640
+OK: 2 baitu | 10f39da4f9a1225dca476d46dba0edbc3d83d7a1045ac93e5d41fa6f3db9c541
+OK: 2 baitu | e85e11dfbf5c8d00d12935b4ed2b5a7f6d3d589aa87decb360edc0a9090d061c
+OK: 3 baitu | 5977a2a1894bfa6c678599f32559eaef97989965669bb5431faa7942d349c127
+OK: 2000 baitu | cb4a9074e0f1b314d613262d701f6e5c2dd13ac21f4cf921128fd4aff6da5ee7
+Determinizmo testai pavyko.

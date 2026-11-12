@@ -1,0 +1,8 @@
+status=PASS
+expected_algorithm=v0.1
+exit_run_1=0
+exit_run_2=0
+hash_cases_run_1=6
+hash_cases_run_2=6
+exe_sha256=6D4E8A228384AA26CD77A523E80F4318E74D03EB92DC1BBF24925898582E1ECF
+powershell_version=5.1.26100.6584
