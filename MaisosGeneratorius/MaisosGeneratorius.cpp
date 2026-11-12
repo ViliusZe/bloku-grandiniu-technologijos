@@ -1,19 +1,35 @@
+#include <array>
+#include <sstream>
 #include <iostream>
 #include <fstream>
 #include <string>
 #include <cstdint>
 #include <iomanip>
 
-std::uint32_t calculateHash(const std::string& text) {
-    std::uint32_t result = 0;
+std::string calculateHash(const std::string& text) {
+    std::array<std::uint32_t, 8> state = {
+        1, 2, 3, 4, 5, 6, 7, 8
+    };
+
+    const std::array<std::uint32_t, 8> multipliers = {
+        31, 37, 41, 43, 47, 53, 59, 61
+    };
 
     for (unsigned char ch : text) {
-        result = (result * 31) ^ ch;
+        for (std::size_t i = 0; i < state.size(); ++i) {
+            state[i] = (state[i] * multipliers[i]) ^ ch;
+        }
     }
 
-    return result;
-}
+    std::ostringstream out;
+    out << std::hex << std::setfill('0');
 
+    for (std::uint32_t value : state) {
+        out << std::setw(8) << value;
+    }
+
+    return out.str();
+}
 bool readFile(const std::string& filename, std::string& text) {
     std::ifstream in(filename, std::ios::binary);
 
@@ -63,11 +79,9 @@ int main(int argc, char* argv[]) {
         return 1;
     }
 
-    std::uint32_t hash = calculateHash(text);
+    std::string hash = calculateHash(text);
 
-    std::cout << "Maisa: "
-        << std::hex << std::setfill('0') << std::setw(8)
-        << hash << '\n';
+    std::cout << "Maisa: " << hash << '\n';
 
     return 0;
 }
