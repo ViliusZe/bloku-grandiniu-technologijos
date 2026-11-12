@@ -8,7 +8,7 @@ std::wint_t calculateHash(const std::string& text)
     std::int32_t result = 0;
     for (unsigned char ch : text)
     {
-        result =result * 31 +ch;
+        result = (result * 31) ^ch;
     }
     return result;
 }
