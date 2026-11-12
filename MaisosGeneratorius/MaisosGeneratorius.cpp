@@ -1,39 +1,73 @@
 #include <iostream>
+#include <fstream>
 #include <string>
 #include <cstdint>
 #include <iomanip>
 
-std::wint_t calculateHash(const std::string& text)
-{
-    std::int32_t result = 0;
-    for (unsigned char ch : text)
-    {
-        result = (result * 31) ^ch;
+std::uint32_t calculateHash(const std::string& text) {
+    std::uint32_t result = 0;
+
+    for (unsigned char ch : text) {
+        result = (result * 31) ^ ch;
     }
+
     return result;
 }
 
-int main()
-{
-    std::string text;
-    std::cout << "Iveskite teksta: ";
-    if (!std::getline(std::cin, text))
-    {
-        std::cerr << "Klaida nepavyko perskaityti teksto.\n";
-        return 1;
+bool readFile(const std::string& filename, std::string& text) {
+    std::ifstream in(filename, std::ios::binary);
+
+    if (!in.is_open()) {
+        std::cerr << "Klaida: nepavyko atidaryti failo "
+            << filename << '\n';
+        return false;
     }
-    std::int32_t hash = calculateHash(text);
-    std::cout << "Maisa: " << std::hex << std::setfill('0') << std::setw(8) << hash << "\n";
-    return 0;
+
+    text.clear();
+    char ch;
+
+    while (in.get(ch)) {
+        text += ch;
+    }
+
+    if (in.bad() || !in.eof()) {
+        std::cerr << "Klaida: nepavyko perskaityti viso failo.\n";
+        return false;
+    }
+
+    return true;
 }
 
-// Run program: Ctrl + F5 or Debug > Start Without Debugging menu
-// Debug program: F5 or Debug > Start Debugging menu
+int main(int argc, char* argv[]) {
+    std::string text;
 
-// Tips for Getting Started: 
-//   1. Use the Solution Explorer window to add/manage files
-//   2. Use the Team Explorer window to connect to source control
-//   3. Use the Output window to see build output and other messages
-//   4. Use the Error List window to view errors
-//   5. Go to Project > Add New Item to create new code files, or Project > Add Existing Item to add existing code files to the project
-//   6. In the future, to open this project again, go to File > Open > Project and select the .sln file
+    if (argc == 1) {
+        std::cout << "Rezimas: ranka ivestas tekstas\n";
+        std::cout << "Iveskite teksta: ";
+
+        if (!std::getline(std::cin, text)) {
+            std::cerr << "Klaida: nepavyko perskaityti teksto.\n";
+            return 1;
+        }
+    }
+    else if (argc == 2) {
+        std::cout << "Rezimas: failo turinys\n";
+
+        if (!readFile(argv[1], text)) {
+            return 1;
+        }
+    }
+    else {
+        std::cerr
+            << "Naudojimas: MaisosGeneratorius.exe [failo_kelias]\n";
+        return 1;
+    }
+
+    std::uint32_t hash = calculateHash(text);
+
+    std::cout << "Maisa: "
+        << std::hex << std::setfill('0') << std::setw(8)
+        << hash << '\n';
+
+    return 0;
+}
