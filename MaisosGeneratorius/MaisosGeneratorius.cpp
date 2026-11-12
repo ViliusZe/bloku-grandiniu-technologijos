@@ -137,13 +137,45 @@ int testDeterminism() {
     std::cout << "Determinizmo testai pavyko.\n";
     return 0;
 }
+int testFormat() {
+    const std::array<std::string, 7> inputs = {
+        "", "a", "ab", "ba", " a ",
+        std::string(2000, 'x'),
+        "\xC4\x85"
+    };
 
+    for (const std::string& text : inputs) {
+        std::string hash = calculateHash(text);
+
+        if (hash.size() != 64) {
+            std::cerr << "KLAIDA: netinkamas maisos ilgis: "
+                << hash.size() << '\n';
+            return 1;
+        }
+
+        if (hash.find_first_not_of("0123456789abcdef")
+            != std::string::npos) {
+            std::cerr << "KLAIDA: netinkami hex simboliai.\n";
+            return 1;
+        }
+
+        std::cout << "Formatas tinkamas. Ivesties baitu: "
+            << text.size() << '\n';
+    }
+
+    std::cout << "Formato testai pavyko.\n";
+    return 0;
+}
 int main(int argc, char* argv[]) {
 #ifdef _WIN32
     SetConsoleCP(CP_UTF8);
     SetConsoleOutputCP(CP_UTF8);
 #endif
     if (argc == 2 && std::string(argv[1]) == "--test") {
+        if (testFormat() != 0) {
+            return 1;
+        }
+
         return testDeterminism();
     }
     if (argc == 2 && std::string(argv[1]) == "--avalanche") {
