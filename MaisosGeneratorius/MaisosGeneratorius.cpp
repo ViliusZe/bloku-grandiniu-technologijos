@@ -1,11 +1,30 @@
-// MaisosGeneratorius.cpp : This file contains the 'main' function. Program execution begins and ends there.
-//
-
 #include <iostream>
+#include <string>
+#include <cstdint>
+#include <iomanip>
+
+std::wint_t calculateHash(const std::string& text)
+{
+    std::int32_t result = 0;
+    for (unsigned char ch : text)
+    {
+        result += ch;
+    }
+    return result;
+}
 
 int main()
 {
-    std::cout << "Hello World!\n";
+    std::string text;
+    std::cout << "Iveskite teksta: ";
+    if (!std::getline(std::cin, text))
+    {
+        std::cerr << "Klaida nepavyko perskaityti teksto.\n";
+        return 1;
+    }
+    std::int32_t hash = calculateHash(text);
+    std::cout << "Maisa: " << std::hex << std::setfill('0') << std::setw(8) << hash << "\n";
+    return 0;
 }
 
 // Run program: Ctrl + F5 or Debug > Start Without Debugging menu
