@@ -8,7 +8,7 @@
 #ifdef _WIN32
 #include <windows.h>
 #endif
-
+constexpr std::size_t MAX_INPUT_BYTES = 16u * 1024u * 1024u;
 std::string calculateHash(const std::string& text) {
     std::array<std::uint32_t, 8> state = {
         1, 2, 3, 4, 5, 6, 7, 8
@@ -46,6 +46,11 @@ bool readFile(const std::string& filename, std::string& text) {
     char ch;
 
     while (in.get(ch)) {
+        if (text.size() >= MAX_INPUT_BYTES) {
+            std::cerr << "Klaida: ivestis virsija 16 MiB.\n";
+            return false;
+        }
+
         text += ch;
     }
 
@@ -62,6 +67,7 @@ int main(int argc, char* argv[]) {
     SetConsoleCP(CP_UTF8);
     SetConsoleOutputCP(CP_UTF8);
 #endif
+
     std::string text;
 
     if (argc == 1) {
@@ -85,9 +91,15 @@ int main(int argc, char* argv[]) {
             << "Naudojimas: MaisosGeneratorius.exe [failo_kelias]\n";
         return 1;
     }
-    std::cout << "Ivesties baitu: " << text.size() << '\n';
-    std::string hash = calculateHash(text);
 
+    if (text.size() > MAX_INPUT_BYTES) {
+        std::cerr << "Klaida: ivestis virsija 16 MiB.\n";
+        return 1;
+    }
+
+    std::cout << "Ivesties baitu: " << text.size() << '\n';
+
+    std::string hash = calculateHash(text);
     std::cout << "Maisa: " << hash << '\n';
 
     return 0;
