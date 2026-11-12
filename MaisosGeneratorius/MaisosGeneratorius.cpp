@@ -1,3 +1,4 @@
+#include <filesystem>
 #include <chrono>
 #include <vector>
 #include <random>
@@ -293,7 +294,7 @@ int testAvalancheStatistics() {
 }
 double measureHashBatch(const std::string& text,
     std::size_t repetitions, std::uint64_t& checksum) {
-    // Volatile funkcijos rodykle neleidzia pakelti kvietimo uz ciklo.
+    // Volatile funkcijos rodykle neleidzia pakelti kvietimo už ciklo.
     std::string (*volatile hashFunction)(const std::string&) = &calculateHash;
 
     auto start = std::chrono::steady_clock::now();
@@ -317,7 +318,7 @@ int benchmarkFile(const std::string& filename) {
         return 1;
     }
 
-    // Saugome originalius baitus ir eiluciu skirtukus.
+    // Saugome originalius baitus ir eilučiu skirtukus.
     std::vector<std::size_t> lineEnds;
     for (std::size_t i = 0; i < text.size(); ++i) {
         if (text[i] == '\n') lineEnds.push_back(i + 1);
@@ -351,12 +352,12 @@ int benchmarkFile(const std::string& filename) {
 
     std::uint64_t checksum = 0;
     for (std::size_t lines : lineCounts) {
-        // Istrauka sudaroma pries matuojant laika.
+        // Ištrauka sudaroma pries matuojant laika.
         std::string input = text.substr(0, lineEnds[lines - 1]);
 
         measureHashBatch(input, 3, checksum); // Apsilimas.
 
-        // Parenkame grupe, kuriai reikia bent 20 ms, kai imanoma.
+        // Parenkame grupę, kuriai reikia bent 20 ms, kai imanoma.
         std::size_t repetitions = 1;
         while (true) {
             double elapsed = measureHashBatch(input, repetitions, checksum);
@@ -395,11 +396,202 @@ int benchmarkFile(const std::string& filename) {
     return 0;
 }
 
+struct InputTestCase {
+    std::string filename;
+    std::string category;
+    std::string data;
+    std::string reference = "";
+    std::size_t changedPosition = 0;
+};
+
+std::vector<InputTestCase> makeInputCases(unsigned int seed,
+    const std::string& alphabet) {
+    std::vector<InputTestCase> cases = {
+        {"empty.bin", "empty", ""},
+        {"one_a.txt", "one_byte", "a"},
+        {"one_b.txt", "one_byte", "b"}
+    };
+
+    std::mt19937 generator(seed);
+    std::uniform_int_distribution<std::size_t> character(0, alphabet.size() - 1);
+    const std::array<std::size_t, 3> lengths = {2000, 5000, 10000};
+    const std::array<std::string, 3> labels = {"start", "middle", "end"};
+
+    for (std::size_t length : lengths) {
+        std::string original(length, ' ');
+        for (char& ch : original) ch = alphabet[character(generator)];
+
+        std::string base = "random_" + std::to_string(length);
+        cases.push_back({base + ".txt", "random_original", original});
+        const std::array<std::size_t, 3> positions = {0, length / 2, length - 1};
+
+        for (std::size_t i = 0; i < positions.size(); ++i) {
+            std::string changed = original;
+            std::size_t position = positions[i];
+            changed[position] = original[position] == 'a' ? 'b' : 'a';
+            cases.push_back({base + "_" + labels[i] + ".txt",
+                "single_byte_change", changed, base + ".txt", position});
+        }
+    }
+
+    cases.push_back({"repeat_a_2000.txt", "repeated", std::string(2000, 'a')});
+    std::string repeated;
+    for (int i = 0; i < 1000; ++i) repeated += "ab";
+    cases.push_back({"repeat_ab_2000.txt", "repeated", repeated});
+    cases.push_back({"order_ab.txt", "permutation", "ab"});
+    cases.push_back({"order_ba.txt", "permutation", "ba"});
+    cases.push_back({"plain.txt", "spaces", "tekstas"});
+    cases.push_back({"leading_space.txt", "spaces", " tekstas"});
+    cases.push_back({"trailing_space.txt", "spaces", "tekstas "});
+    cases.push_back({"both_spaces.txt", "spaces", " tekstas "});
+    cases.push_back({"newline_lf.txt", "newline", "tekstas\n"});
+    cases.push_back({"newline_crlf.txt", "newline", "tekstas\r\n"});
+    cases.push_back({"utf8_lt.txt", "utf8", "\xC4\x85\xC5\xBE" "uolas"});
+    cases.push_back({"binary.bin", "binary", std::string("\x00\x01\x7F\x80\xFF\n\r", 7)});
+    return cases;
+}
+
+bool saveAndCheckInput(const std::filesystem::path& folder,
+    const InputTestCase& test, std::ofstream& manifest) {
+    std::filesystem::path path = folder / test.filename;
+    std::ofstream out(path, std::ios::binary);
+    if (!out.is_open()) {
+        std::cerr << "Klaida: nepavyko sukurti " << path.string() << '\n';
+        return false;
+    }
+    out.write(test.data.data(), static_cast<std::streamsize>(test.data.size()));
+    out.close();
+    if (!out) {
+        std::cerr << "Klaida: nepavyko irasyti " << test.filename << '\n';
+        return false;
+    }
+
+    std::string loaded;
+    if (!readFile(path.string(), loaded)) return false;
+    if (loaded != test.data) {
+        std::cerr << "Klaida: nesutampa failo baitai: " << test.filename << '\n';
+        return false;
+    }
+
+    std::string hash = calculateHash(loaded);
+    if (hash != calculateHash(test.data) || hash.size() != 64
+        || hash.find_first_not_of("0123456789abcdef") != std::string::npos) {
+        std::cerr << "Klaida: netinkama maisa: " << test.filename << '\n';
+        return false;
+    }
+
+    std::size_t differentBytes = 0;
+    if (!test.reference.empty()) {
+        std::string original;
+        if (!readFile((folder / test.reference).string(), original)) return false;
+        if (loaded.size() != original.size() || test.changedPosition >= loaded.size()) {
+            std::cerr << "Klaida: netinkamas pakeistos ivesties dydis.\n";
+            return false;
+        }
+        for (std::size_t i = 0; i < loaded.size(); ++i) {
+            if (loaded[i] != original[i]) ++differentBytes;
+        }
+        if (differentBytes != 1
+            || loaded[test.changedPosition] == original[test.changedPosition]) {
+            std::cerr << "Klaida: pakeistas ne vienas nurodytas baitas.\n";
+            return false;
+        }
+    }
+
+    manifest << test.filename << ',' << test.category << ','
+        << loaded.size() << ',' << hash << ',';
+    if (!test.reference.empty()) {
+        manifest << test.reference << ',' << test.changedPosition << ',' << differentBytes;
+    } else {
+        manifest << ",,";
+    }
+    manifest << ",OK\n";
+    std::cout << "OK: " << test.filename << " | " << loaded.size() << " baitu\n";
+    return true;
+}
+
+int testInputFiles() {
+    const unsigned int seed = 2026;
+    const std::string alphabet =
+        "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
+    const std::filesystem::path folder = "test_inputs";
+    std::error_code error;
+    std::filesystem::create_directories(folder, error);
+    if (error) {
+        std::cerr << "Klaida: nepavyko sukurti test_inputs: " << error.message() << '\n';
+        return 1;
+    }
+
+    std::ofstream manifest(folder / "manifest.csv");
+    if (!manifest.is_open()) {
+        std::cerr << "Klaida: nepavyko sukurti manifest.csv\n";
+        return 1;
+    }
+    manifest << "file,category,bytes,hash,reference,changed_position,different_bytes,status\n";
+    const auto cases = makeInputCases(seed, alphabet);
+    std::size_t mutations = 0;
+    for (const InputTestCase& test : cases) {
+        if (!saveAndCheckInput(folder, test, manifest)) return 1;
+        if (!test.reference.empty()) ++mutations;
+    }
+    manifest.close();
+    if (!manifest) {
+        std::cerr << "Klaida: nepavyko issaugoti manifesto.\n";
+        return 1;
+    }
+
+    std::ofstream conditions(folder / "conditions.txt");
+    if (!conditions.is_open()) {
+        std::cerr << "Klaida: nepavyko sukurti conditions.txt\n";
+        return 1;
+    }
+    conditions << "algorithm=v0.1\ngenerator=std::mt19937\nseed=" << seed
+        << "\nalphabet=" << alphabet
+        << "\nrandom_lengths_bytes=2000,5000,10000"
+        << "\nmutation_positions=0,length/2,length-1 (zero-based)"
+        << "\nutf8_lt.txt=7_characters,9_bytes,UTF-8_without_BOM"
+        << "\nnewlines=exact_LF_and_CRLF_bytes"
+        << "\nhash_bits=256\nhex_digits=64\nfiles=" << cases.size() << '\n';
+#if defined(_MSC_FULL_VER)
+    conditions << "compiler=MSVC " << _MSC_FULL_VER << '\n';
+#elif defined(__clang__)
+    conditions << "compiler=Clang " << __clang_version__ << '\n';
+#elif defined(__GNUC__)
+    conditions << "compiler=GCC " << __VERSION__ << '\n';
+#endif
+#if defined(_MSVC_LANG)
+    conditions << "cpp_standard=" << _MSVC_LANG << '\n';
+#else
+    conditions << "cpp_standard=" << __cplusplus << '\n';
+#endif
+#if defined(_MSVC_STL_VERSION)
+    conditions << "stdlib=MSVC_STL " << _MSVC_STL_VERSION << '\n';
+#elif defined(__GLIBCXX__)
+    conditions << "stdlib=libstdc++ " << __GLIBCXX__ << '\n';
+#elif defined(_LIBCPP_VERSION)
+    conditions << "stdlib=libc++ " << _LIBCPP_VERSION << '\n';
+#endif
+    conditions.close();
+    if (!conditions) {
+        std::cerr << "Klaida: nepavyko issaugoti bandymo salygu.\n";
+        return 1;
+    }
+
+    std::cout << "Sukurta ir patikrinta failu: " << cases.size() << '\n'
+        << "Vieno baito pakeitimu: " << mutations << '\n'
+        << "Rezultatai: test_inputs/manifest.csv\n"
+        << "Salygos: test_inputs/conditions.txt\n";
+    return 0;
+}
+
 int main(int argc, char* argv[]) {
 #ifdef _WIN32
     SetConsoleCP(CP_UTF8);
     SetConsoleOutputCP(CP_UTF8);
 #endif
+    if (argc == 2 && std::string(argv[1]) == "--input-tests") {
+        return testInputFiles();
+    }
     if (argc >= 2 && std::string(argv[1]) == "--benchmark") {
         if (argc != 3) {
             std::cerr << "Naudojimas: MaisosGeneratorius.exe --benchmark failo_kelias\n";

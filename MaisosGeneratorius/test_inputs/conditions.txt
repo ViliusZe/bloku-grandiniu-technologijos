@@ -1,0 +1,14 @@
+algorithm=v0.1
+generator=std::mt19937
+seed=2026
+alphabet=abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789
+random_lengths_bytes=2000,5000,10000
+mutation_positions=0,length/2,length-1 (zero-based)
+utf8_lt.txt=7_characters,9_bytes,UTF-8_without_BOM
+newlines=exact_LF_and_CRLF_bytes
+hash_bits=256
+hex_digits=64
+files=27
+compiler=MSVC 195237029
+cpp_standard=202002
+stdlib=MSVC_STL 145
