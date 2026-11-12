@@ -1,0 +1,13 @@
+{
+  "source_url": "https://e-seimas.lrs.lt/rs/actualedition/TAIS.1890/oiUlTMOYlq/format/ISO_PDF/",
+  "retrieved_date": "2026-11-12",
+  "source_description": "Official Constitution PDF, edition identifier oiUlTMOYlq; converted benchmark text, not the course original TXT.",
+  "conversion": "pdftotext -layout -enc UTF-8 -nopgbrk konstitucija.pdf konstitucija.txt",
+  "converter": "pdftotext version 25.03.0",
+  "pdf_sha256": "ec0ea8508b01fec06cd718fec8c3e8542aae81a102071aa2b262013d15696c8d",
+  "text_sha256": "a3d3ae8d78ca4f36400ba8ef7233c45257843a939de72d28c2d7bb1170764034",
+  "encoding": "UTF-8 without BOM",
+  "line_endings": "LF",
+  "text_bytes": 77895,
+  "lines": 1351
+}

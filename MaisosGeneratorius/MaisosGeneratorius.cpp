@@ -1,3 +1,6 @@
+#include <chrono>
+#include <vector>
+#include <random>
 #include <array>
 #include <sstream>
 #include <iostream>
@@ -7,7 +10,6 @@
 #include <iomanip>
 #ifdef _WIN32
 #include <windows.h>
-#include <random>
 #endif
 constexpr std::size_t MAX_INPUT_BYTES = 16u * 1024u * 1024u;
 std::uint32_t rotateLeft13(std::uint32_t value) {
@@ -289,11 +291,122 @@ int testAvalancheStatistics() {
 
     return 0;
 }
+double measureHashBatch(const std::string& text,
+    std::size_t repetitions, std::uint64_t& checksum) {
+    // Volatile funkcijos rodykle neleidzia pakelti kvietimo uz ciklo.
+    std::string (*volatile hashFunction)(const std::string&) = &calculateHash;
+
+    auto start = std::chrono::steady_clock::now();
+
+    for (std::size_t i = 0; i < repetitions; ++i) {
+        std::string hash = hashFunction(text);
+        checksum += static_cast<unsigned char>(hash[0]);
+    }
+
+    auto end = std::chrono::steady_clock::now();
+    return std::chrono::duration<double, std::micro>(end - start).count();
+}
+
+int benchmarkFile(const std::string& filename) {
+    std::string text;
+    if (!readFile(filename, text)) {
+        return 1;
+    }
+    if (text.empty()) {
+        std::cerr << "Klaida: spartos bandymui reikia netuscio failo.\n";
+        return 1;
+    }
+
+    // Saugome originalius baitus ir eiluciu skirtukus.
+    std::vector<std::size_t> lineEnds;
+    for (std::size_t i = 0; i < text.size(); ++i) {
+        if (text[i] == '\n') lineEnds.push_back(i + 1);
+    }
+    if (lineEnds.empty() || lineEnds.back() != text.size()) {
+        lineEnds.push_back(text.size());
+    }
+
+    std::vector<std::size_t> lineCounts;
+    for (std::size_t lines = 1; lines < lineEnds.size(); lines *= 2) {
+        lineCounts.push_back(lines);
+    }
+    lineCounts.push_back(lineEnds.size());
+
+    std::ofstream raw("benchmark_raw.csv");
+    std::ofstream summary("benchmark_summary.csv");
+    if (!raw.is_open() || !summary.is_open()) {
+        std::cerr << "Klaida: nepavyko sukurti spartos rezultatu failu.\n";
+        return 1;
+    }
+
+    raw << "lines,bytes,trial,iterations,total_us,per_hash_us\n";
+    summary << "lines,bytes,iterations,mean_us,min_us,max_us\n";
+    raw << std::fixed << std::setprecision(6);
+    summary << std::fixed << std::setprecision(6);
+    std::cout << std::fixed << std::setprecision(6);
+    std::cout << "Laikrodis: steady_clock\n"
+        << "Vienetas: mikrosekundes vienai maisai\n"
+        << "Matavimu kiekvienam dydziui: 5\n"
+        << "lines,bytes,iterations,mean_us,min_us,max_us\n";
+
+    std::uint64_t checksum = 0;
+    for (std::size_t lines : lineCounts) {
+        // Istrauka sudaroma pries matuojant laika.
+        std::string input = text.substr(0, lineEnds[lines - 1]);
+
+        measureHashBatch(input, 3, checksum); // Apsilimas.
+
+        // Parenkame grupe, kuriai reikia bent 20 ms, kai imanoma.
+        std::size_t repetitions = 1;
+        while (true) {
+            double elapsed = measureHashBatch(input, repetitions, checksum);
+            if (elapsed >= 20000.0 || repetitions >= 1048576) break;
+            repetitions *= 2;
+        }
+
+        double minimum = 0, maximum = 0, sum = 0;
+        for (int trial = 1; trial <= 5; ++trial) {
+            double elapsed = measureHashBatch(input, repetitions, checksum);
+            double perHash = elapsed / static_cast<double>(repetitions);
+
+            if (trial == 1 || perHash < minimum) minimum = perHash;
+            if (trial == 1 || perHash > maximum) maximum = perHash;
+            sum += perHash;
+
+            raw << lines << ',' << input.size() << ',' << trial << ','
+                << repetitions << ',' << elapsed << ',' << perHash << '\n';
+        }
+
+        summary << lines << ',' << input.size() << ',' << repetitions << ','
+            << sum / 5.0 << ',' << minimum << ',' << maximum << '\n';
+        std::cout << lines << ',' << input.size() << ',' << repetitions << ','
+            << sum / 5.0 << ',' << minimum << ',' << maximum << '\n';
+    }
+
+    raw.close();
+    summary.close();
+    if (!raw || !summary) {
+        std::cerr << "Klaida: nepavyko issaugoti visu matavimu.\n";
+        return 1;
+    }
+
+    std::cout << "Kontroline suma: " << checksum << '\n'
+        << "Rezultatai: benchmark_raw.csv, benchmark_summary.csv\n";
+    return 0;
+}
+
 int main(int argc, char* argv[]) {
 #ifdef _WIN32
     SetConsoleCP(CP_UTF8);
     SetConsoleOutputCP(CP_UTF8);
 #endif
+    if (argc >= 2 && std::string(argv[1]) == "--benchmark") {
+        if (argc != 3) {
+            std::cerr << "Naudojimas: MaisosGeneratorius.exe --benchmark failo_kelias\n";
+            return 1;
+        }
+        return benchmarkFile(argv[2]);
+    }
     if (argc == 2 && std::string(argv[1]) == "--test") {
         if (testFormat() != 0) {
             return 1;
@@ -328,7 +441,8 @@ int main(int argc, char* argv[]) {
     }
     else {
         std::cerr
-            << "Naudojimas: MaisosGeneratorius.exe [failo_kelias]\n";
+            << "Naudojimas: MaisosGeneratorius.exe [failo_kelias]\n"
+            << "Spartos bandymas: MaisosGeneratorius.exe --benchmark failo_kelias\n";
         return 1;
     }
 
