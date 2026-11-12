@@ -5,6 +5,9 @@
 #include <string>
 #include <cstdint>
 #include <iomanip>
+#ifdef _WIN32
+#include <windows.h>
+#endif
 
 std::string calculateHash(const std::string& text) {
     std::array<std::uint32_t, 8> state = {
@@ -55,6 +58,10 @@ bool readFile(const std::string& filename, std::string& text) {
 }
 
 int main(int argc, char* argv[]) {
+#ifdef _WIN32
+    SetConsoleCP(CP_UTF8);
+    SetConsoleOutputCP(CP_UTF8);
+#endif
     std::string text;
 
     if (argc == 1) {
@@ -78,7 +85,7 @@ int main(int argc, char* argv[]) {
             << "Naudojimas: MaisosGeneratorius.exe [failo_kelias]\n";
         return 1;
     }
-
+    std::cout << "Ivesties baitu: " << text.size() << '\n';
     std::string hash = calculateHash(text);
 
     std::cout << "Maisa: " << hash << '\n';
