@@ -7,6 +7,7 @@
 #include <iomanip>
 #ifdef _WIN32
 #include <windows.h>
+#include <random>
 #endif
 constexpr std::size_t MAX_INPUT_BYTES = 16u * 1024u * 1024u;
 std::uint32_t rotateLeft13(std::uint32_t value) {
@@ -166,6 +167,128 @@ int testFormat() {
     std::cout << "Formato testai pavyko.\n";
     return 0;
 }
+struct MetricStats {
+    double minimum = 100.0;
+    double maximum = 0.0;
+    double sum = 0.0;
+    std::size_t count = 0;
+
+    void add(double value) {
+        if (value < minimum) minimum = value;
+        if (value > maximum) maximum = value;
+
+        sum += value;
+        ++count;
+    }
+
+    double mean() const {
+        return sum / static_cast<double>(count);
+    }
+};
+
+void printMetric(const std::string& name, const MetricStats& stats) {
+    std::cout << name << ": min=" << stats.minimum
+        << "% vid=" << stats.mean()
+        << "% max=" << stats.maximum << "%\n";
+}
+
+int testAvalancheStatistics() {
+    const unsigned int seed = 2026;
+    const int pairsPerLength = 25000;
+    const std::array<std::size_t, 4> lengths = { 10, 100, 500, 1000 };
+
+    const std::string alphabet =
+        "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
+
+    std::mt19937 generator(seed);
+    std::uniform_int_distribution<std::size_t> character(
+        0, alphabet.size() - 1
+    );
+
+    std::ofstream out("avalanche_raw.csv");
+
+    if (!out.is_open()) {
+        std::cerr << "Klaida: nepavyko sukurti avalanche_raw.csv\n";
+        return 1;
+    }
+
+    out << "length,pair,position,different_bits,different_hex,"
+        "bits_percent,hex_percent\n";
+
+    out << std::fixed << std::setprecision(6);
+    std::cout << std::fixed << std::setprecision(4);
+    std::cout << "Seed: " << seed
+        << "\nAbecele: " << alphabet << '\n';
+
+    MetricStats allBits, allHex;
+
+    for (std::size_t length : lengths) {
+        MetricStats bitStats, hexStats;
+
+        std::uniform_int_distribution<std::size_t> position(
+            0, length - 1
+        );
+
+        for (int pair = 0; pair < pairsPerLength; ++pair) {
+            std::string first(length, ' ');
+
+            for (char& ch : first) {
+                ch = alphabet[character(generator)];
+            }
+
+            std::string second = first;
+            std::size_t changed = position(generator);
+
+            do {
+                second[changed] = alphabet[character(generator)];
+            } while (second[changed] == first[changed]);
+
+            std::string firstHash = calculateHash(first);
+            std::string secondHash = calculateHash(second);
+
+            int bits = countDifferentBits(firstHash, secondHash);
+            int hex = 0;
+
+            for (std::size_t i = 0; i < firstHash.size(); ++i) {
+                if (firstHash[i] != secondHash[i]) {
+                    ++hex;
+                }
+            }
+
+            double bitsPercent = 100.0 * bits / 256.0;
+            double hexPercent = 100.0 * hex / 64.0;
+
+            bitStats.add(bitsPercent);
+            hexStats.add(hexPercent);
+            allBits.add(bitsPercent);
+            allHex.add(hexPercent);
+
+            out << length << ',' << pair + 1 << ',' << changed << ','
+                << bits << ',' << hex << ','
+                << bitsPercent << ',' << hexPercent << '\n';
+        }
+
+        std::cout << "\nIlgis: " << length
+            << ", poru: " << bitStats.count << '\n';
+
+        printMetric("Bitai", bitStats);
+        printMetric("Hex", hexStats);
+    }
+
+    out.close();
+
+    if (!out) {
+        std::cerr << "Klaida: nepavyko issaugoti visu rezultatu.\n";
+        return 1;
+    }
+
+    std::cout << "\nViso poru: " << allBits.count << '\n';
+    printMetric("Bitai", allBits);
+    printMetric("Hex", allHex);
+    std::cout << "Rezultatai: avalanche_raw.csv\n";
+
+    return 0;
+}
 int main(int argc, char* argv[]) {
 #ifdef _WIN32
     SetConsoleCP(CP_UTF8);
@@ -181,6 +304,9 @@ int main(int argc, char* argv[]) {
     if (argc == 2 && std::string(argv[1]) == "--avalanche") {
         testAvalanche();
         return 0;
+    }
+    if (argc == 2 && std::string(argv[1]) == "--avalanche-stats") {
+        return testAvalancheStatistics();
     }
     std::string text;
 
