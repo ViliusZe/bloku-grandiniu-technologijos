@@ -1,0 +1,5 @@
+length,pairs,pair_collisions,generated_inputs,distinct_inputs,distinct_hashes,collision_groups,saved_pair_examples,saved_set_examples
+10,100000,0,200000,200000,200000,0,0,0
+100,100000,0,200000,200000,200000,0,0,0
+500,100000,0,200000,200000,200000,0,0,0
+1000,100000,0,200000,200000,200000,0,0,0

@@ -1,3 +1,5 @@
+#include <unordered_map>
+#include <set>
 #include <filesystem>
 #include <chrono>
 #include <vector>
@@ -584,11 +586,227 @@ int testInputFiles() {
     return 0;
 }
 
+struct CollisionIndex {
+    std::unordered_map<std::string, std::set<std::string>> groups;
+    std::uint64_t distinctInputs = 0;
+    std::uint64_t collisionGroups = 0;
+
+    bool add(const std::string& input, const std::string& hash,
+        std::string& partner) {
+        auto& group = groups[hash];
+        auto inserted = group.insert(input);
+        if (!inserted.second) return false; // Ta pati ivestis nera kolizija.
+
+        ++distinctInputs;
+        if (group.size() == 2) ++collisionGroups;
+        if (group.size() > 1) {
+            auto other = group.begin();
+            if (other == inserted.first) ++other;
+            partner = *other;
+            return true;
+        }
+        return false;
+    }
+};
+
+std::string inputBytesToHex(const std::string& input) {
+    std::ostringstream out;
+    out << std::hex << std::setfill('0');
+    for (unsigned char byte : input) {
+        out << std::setw(2) << static_cast<unsigned int>(byte);
+    }
+    return out.str();
+}
+
+void writeCollisionExample(std::ofstream& out, const std::string& stage,
+    std::size_t length, std::size_t pair, const std::string& hash,
+    const std::string& first, const std::string& second) {
+    out << stage << ','
+        << (stage == "structured" ? "mixed" : std::to_string(length))
+        << ',' << pair << ',' << first.size() << ',' << second.size() << ',' << hash << ','
+        << inputBytesToHex(first) << ',' << inputBytesToHex(second) << '\n';
+}
+
+std::string randomCollisionInput(std::size_t length,
+    std::mt19937& generator,
+    std::uniform_int_distribution<std::size_t>& character,
+    const std::string& alphabet) {
+    std::string input(length, ' ');
+    for (char& ch : input) ch = alphabet[character(generator)];
+    return input;
+}
+
+int testCollisions() {
+    const unsigned int seed = 2026;
+    const std::size_t pairsPerLength = 100000;
+    const std::size_t exampleLimit = 10;
+    const std::array<std::size_t, 4> lengths = {10, 100, 500, 1000};
+    const std::string alphabet =
+        "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
+    std::mt19937 generator(seed);
+    std::uniform_int_distribution<std::size_t> character(0, alphabet.size() - 1);
+
+    std::ofstream summary("collision_summary.csv");
+    std::ofstream examples("collision_examples.csv");
+    std::ofstream structured("collision_structured.csv");
+    std::ofstream conditions("collision_conditions.txt");
+    if (!summary.is_open() || !examples.is_open()
+        || !structured.is_open() || !conditions.is_open()) {
+        std::cerr << "Klaida: nepavyko sukurti koliziju bandymo failu.\n";
+        return 1;
+    }
+    summary << "length,pairs,pair_collisions,generated_inputs,distinct_inputs,"
+        "distinct_hashes,collision_groups,saved_pair_examples,saved_set_examples\n";
+    examples << "stage,group_length,index,first_bytes,second_bytes,hash,first_input_hex,second_input_hex\n";
+    structured << "name,bytes,input_hex,hash,distinct_inputs_in_hash_group\n";
+    conditions << "algorithm=v0.1\ngenerator=std::mt19937\nseed=" << seed
+        << "\nalphabet=" << alphabet
+        << "\nlengths=10,100,500,1000\npairs_per_length=" << pairsPerLength
+        << "\ninputs_per_pair=2\nwithin_pair_inputs_must_differ=true"
+        << "\nduplicate_input_is_not_collision=true"
+        << "\ncollision_group=one_hash_with_at_least_two_distinct_inputs"
+        << "\nexamples_limit_per_stage_per_length=" << exampleLimit
+        << "\nexample_encoding=hex_of_exact_input_bytes"
+        << "\nexample_index=one_based_pair_or_structured_sample"
+        << "\nstructured_group_length=mixed\n";
+#if defined(_MSC_FULL_VER)
+    conditions << "compiler=MSVC " << _MSC_FULL_VER << '\n';
+#elif defined(__clang__)
+    conditions << "compiler=Clang " << __clang_version__ << '\n';
+#elif defined(__GNUC__)
+    conditions << "compiler=GCC " << __VERSION__ << '\n';
+#endif
+#if defined(_MSVC_LANG)
+    conditions << "cpp_standard=" << _MSVC_LANG << '\n';
+#else
+    conditions << "cpp_standard=" << __cplusplus << '\n';
+#endif
+#if defined(_MSVC_STL_VERSION)
+    conditions << "stdlib=MSVC_STL " << _MSVC_STL_VERSION << '\n';
+#elif defined(__GLIBCXX__)
+    conditions << "stdlib=libstdc++ " << __GLIBCXX__ << '\n';
+#elif defined(_LIBCPP_VERSION)
+    conditions << "stdlib=libc++ " << _LIBCPP_VERSION << '\n';
+#endif
+
+    std::cout << "Koliziju bandymas: v0.1\nSeed: " << seed << '\n';
+    for (std::size_t length : lengths) {
+        // Vienu metu atmintyje laikome tik vieno ilgio rinkini.
+        CollisionIndex index;
+        index.groups.reserve(2 * pairsPerLength);
+        std::uint64_t pairCollisions = 0;
+        std::size_t savedPairs = 0, savedSet = 0;
+
+        for (std::size_t pair = 1; pair <= pairsPerLength; ++pair) {
+            std::string first = randomCollisionInput(length, generator, character, alphabet);
+            std::string second;
+            do {
+                second = randomCollisionInput(length, generator, character, alphabet);
+            } while (second == first);
+
+            std::string firstHash = calculateHash(first);
+            std::string secondHash = calculateHash(second);
+            if (firstHash == secondHash) {
+                ++pairCollisions;
+                if (savedPairs < exampleLimit) {
+                    writeCollisionExample(examples, "pair", length, pair,
+                        firstHash, first, second);
+                    ++savedPairs;
+                }
+            }
+
+            for (int which = 0; which < 2; ++which) {
+                const std::string& input = which == 0 ? first : second;
+                const std::string& hash = which == 0 ? firstHash : secondHash;
+                std::string partner;
+                if (index.add(input, hash, partner) && savedSet < exampleLimit) {
+                    writeCollisionExample(examples, "whole_set", length, pair,
+                        hash, partner, input);
+                    ++savedSet;
+                }
+            }
+        }
+
+        summary << length << ',' << pairsPerLength << ',' << pairCollisions
+            << ',' << 2 * pairsPerLength << ',' << index.distinctInputs
+            << ',' << index.groups.size() << ',' << index.collisionGroups
+            << ',' << savedPairs << ',' << savedSet << '\n';
+        std::cout << "\nIlgis: " << length << ", poru: " << pairsPerLength
+            << "\nKoliziju porose: " << pairCollisions
+            << "\nSkirtingu ivesciu: " << index.distinctInputs
+            << "\nSkirtingu maisu: " << index.groups.size()
+            << "\nKoliziju grupiu visame rinkinyje: " << index.collisionGroups << '\n';
+    }
+
+    // Atskirai tikriname sablonus, perstatymus, tarpus ir baitinius atvejus.
+    std::vector<InputTestCase> samples;
+    for (const InputTestCase& test : makeInputCases(seed, alphabet)) {
+        if (test.category != "random_original" && test.category != "single_byte_change") {
+            samples.push_back(test);
+        }
+    }
+    for (const std::string& word : std::array<std::string, 6>{"abc", "acb", "bac", "bca", "cab", "cba"}) {
+        samples.push_back({"permutation_" + word, "permutation", word});
+    }
+    for (const std::string& word : std::array<std::string, 4>{"abab", "baba", "aaaa", "bbbb"}) {
+        samples.push_back({"pattern_" + word, "pattern", word});
+    }
+    samples.push_back({"duplicate_ab", "duplicate", "ab"});
+
+    CollisionIndex structuredIndex;
+    std::vector<std::string> hashes;
+    std::size_t savedStructured = 0;
+    for (std::size_t i = 0; i < samples.size(); ++i) {
+        const std::string& input = samples[i].data;
+        std::string hash = calculateHash(input);
+        hashes.push_back(hash);
+        std::string partner;
+        if (structuredIndex.add(input, hash, partner) && savedStructured < exampleLimit) {
+            writeCollisionExample(examples, "structured", input.size(), i + 1,
+                hash, partner, input);
+            ++savedStructured;
+        }
+    }
+    for (std::size_t i = 0; i < samples.size(); ++i) {
+        structured << samples[i].filename << ',' << samples[i].data.size() << ','
+            << inputBytesToHex(samples[i].data) << ',' << hashes[i] << ','
+            << structuredIndex.groups.at(hashes[i]).size() << '\n';
+    }
+    conditions << "structured_samples=" << samples.size()
+        << "\nstructured_distinct_inputs=" << structuredIndex.distinctInputs
+        << "\nstructured_distinct_hashes=" << structuredIndex.groups.size()
+        << "\nstructured_collision_groups=" << structuredIndex.collisionGroups
+        << "\nstructured_saved_examples=" << savedStructured << '\n';
+    std::cout << "\nStrukturuotu pavyzdziu: " << samples.size()
+        << "\nSkirtingu strukturuotu ivesciu: " << structuredIndex.distinctInputs
+        << "\nStrukturuotu ivesciu koliziju grupiu: " << structuredIndex.collisionGroups << '\n';
+
+    summary.close();
+    examples.close();
+    structured.close();
+    if (!summary || !examples || !structured) {
+        std::cerr << "Klaida: nepavyko issaugoti visu koliziju rezultatu.\n";
+        return 1;
+    }
+    conditions << "experiment_complete=true\n";
+    conditions.close();
+    if (!conditions) {
+        std::cerr << "Klaida: nepavyko issaugoti koliziju bandymo salygu.\n";
+        return 1;
+    }
+    std::cout << "\nRezultatai: collision_summary.csv, collision_examples.csv, "
+        << "collision_structured.csv, collision_conditions.txt\n";
+    return 0;
+}
+
 int main(int argc, char* argv[]) {
 #ifdef _WIN32
     SetConsoleCP(CP_UTF8);
     SetConsoleOutputCP(CP_UTF8);
 #endif
+    if (argc == 2 && std::string(argv[1]) == "--collisions") {
+        return testCollisions();
+    }
     if (argc == 2 && std::string(argv[1]) == "--input-tests") {
         return testInputFiles();
     }
